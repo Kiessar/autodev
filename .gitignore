@@ -1,0 +1,4 @@
+state/agent_log.md
+state/progress.md
+projects/*
+!projects/.gitkeep
