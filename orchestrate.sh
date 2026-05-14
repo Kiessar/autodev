@@ -24,7 +24,7 @@ PROJECT_STATE_DIR="${PROJECT_STATE_DIR:-}"
 MAX_TASKS="${MAX_TASKS:-1}"
 MAX_REVIEWS_PER_RUN="${MAX_REVIEWS_PER_RUN:-2}"
 MAX_RUNTIME_SECS="${MAX_RUNTIME_SECS:-2700}"
-MODEL="${MODEL:-claude-sonnet-4-6}"
+MODEL="${MODEL:-gpt-5.4}"
 SKIP_STAGES="${SKIP_STAGES:-}"
 DRY_RUN="${DRY_RUN:-0}"
 FORCE_SYNC="${FORCE_SYNC:-0}"
@@ -33,15 +33,15 @@ BASE_BRANCH="${BASE_BRANCH:-main}"
 SYNC_INTERVAL_SECS="${SYNC_INTERVAL_SECS:-14400}"
 ISSUE_BUFFER_MIN="${ISSUE_BUFFER_MIN:-3}"
 
-MODEL_BOOTSTRAP="${MODEL_BOOTSTRAP:-claude-haiku-4-5-20251001}"
-MODEL_PO="${MODEL_PO:-claude-haiku-4-5-20251001}"
-MODEL_PLANNER="${MODEL_PLANNER:-claude-haiku-4-5-20251001}"
-MODEL_ISSUE="${MODEL_ISSUE:-claude-haiku-4-5-20251001}"
-MODEL_DEVELOPER="${MODEL_DEVELOPER:-claude-sonnet-4-6}"
-MODEL_REVIEWER="${MODEL_REVIEWER:-claude-haiku-4-5-20251001}"
-MODEL_QA="${MODEL_QA:-claude-haiku-4-5-20251001}"
-MODEL_GIT="${MODEL_GIT:-claude-haiku-4-5-20251001}"
-MODEL_RELEASE="${MODEL_RELEASE:-claude-haiku-4-5-20251001}"
+MODEL_BOOTSTRAP="${MODEL_BOOTSTRAP:-gpt-5.4-mini}"
+MODEL_PO="${MODEL_PO:-gpt-5.4-mini}"
+MODEL_PLANNER="${MODEL_PLANNER:-gpt-5.4-mini}"
+MODEL_ISSUE="${MODEL_ISSUE:-gpt-5.4-mini}"
+MODEL_DEVELOPER="${MODEL_DEVELOPER:-gpt-5.4}"
+MODEL_REVIEWER="${MODEL_REVIEWER:-gpt-5.4-mini}"
+MODEL_QA="${MODEL_QA:-gpt-5.4-mini}"
+MODEL_GIT="${MODEL_GIT:-gpt-5.4-mini}"
+MODEL_RELEASE="${MODEL_RELEASE:-gpt-5.4-mini}"
 
 START_TIME="$(date +%s)"
 TASKS_COMPLETED=0
@@ -140,6 +140,141 @@ count_markdown_files() {
   find "$path" -maxdepth 1 -type f -name "*.md" 2>/dev/null | wc -l | tr -d ' '
 }
 
+sync_issue_cache() {
+  local open_dir="$REPO_ROOT/.ai/issues/open"
+  local closed_dir="$REPO_ROOT/.ai/issues/closed"
+  local tmp_json
+  tmp_json="$(mktemp)"
+
+  if ! gh issue list -R "$GH_REPO" --state open --limit 100 --json number,title,url,body,labels,updatedAt > "$tmp_json"; then
+    log "Issue sync failed: unable to fetch open issues from GitHub"
+    rm -f "$tmp_json"
+    return 1
+  fi
+
+  mkdir -p "$open_dir" "$closed_dir"
+
+  python3 - "$tmp_json" "$open_dir" <<'PY'
+import json
+import pathlib
+import sys
+
+data = json.loads(pathlib.Path(sys.argv[1]).read_text())
+open_dir = pathlib.Path(sys.argv[2])
+seen = set()
+
+for issue in data:
+    number = issue["number"]
+    seen.add(number)
+    path = open_dir / f"ISSUE-{number}.md"
+    labels = [label["name"] for label in issue.get("labels", [])]
+    body = (issue.get("body") or "").rstrip()
+    content = [
+        "---",
+        f"issue: {number}",
+        f"title: {json.dumps(issue['title'])}",
+        f"url: {json.dumps(issue['url'])}",
+        f"status: OPEN",
+        f"updated_at: {json.dumps(issue.get('updatedAt', ''))}",
+        f"labels: {json.dumps(labels)}",
+        "---",
+        "",
+        f"# {issue['title']}",
+        "",
+    ]
+    if body:
+        content.append(body)
+        content.append("")
+    path.write_text("\n".join(content))
+
+for path in open_dir.glob("ISSUE-*.md"):
+    try:
+        number = int(path.stem.split("-", 1)[1])
+    except Exception:
+        continue
+    if number not in seen:
+        path.rename(pathlib.Path(sys.argv[2]).parent / "closed" / path.name)
+PY
+
+  rm -f "$tmp_json"
+  local open_count
+  open_count="$(count_markdown_files "$open_dir")"
+  log "Issue sync complete: cached $open_count open issues"
+  return 0
+}
+
+select_active_issue() {
+  local open_dir="$REPO_ROOT/.ai/issues/open"
+  local active_dir="$REPO_ROOT/.ai/active"
+  local active_path
+
+  active_path="$(find "$active_dir" -maxdepth 1 -type f -name 'ISSUE-*.md' -print -quit 2>/dev/null || true)"
+  if [[ -n "$active_path" ]]; then
+    log "Planner: active issue already present ($(basename "$active_path"))"
+    return 0
+  fi
+
+  local selected
+  selected="$(python3 - "$open_dir" <<'PY'
+import pathlib
+import re
+import sys
+
+open_dir = pathlib.Path(sys.argv[1])
+files = sorted(open_dir.glob("ISSUE-*.md"))
+
+def score(path: pathlib.Path):
+    text = path.read_text()
+    issue_number = int(re.search(r"issue:\s*(\d+)", text).group(1))
+    title_match = re.search(r'title:\s*"([^"]+)"', text)
+    title = title_match.group(1) if title_match else ""
+    if title.startswith("Design:"):
+        priority = 0
+    elif title.startswith("Task:"):
+        priority = 1
+    elif title.startswith("Impl:"):
+        priority = 2
+    else:
+        priority = 3
+    return (priority, issue_number, str(path))
+
+if files:
+    print(min(score(path) for path in files)[2])
+PY
+)"
+
+  if [[ -z "$selected" ]]; then
+    log "Planner: no cached issues available to activate"
+    return 1
+  fi
+
+  mkdir -p "$active_dir" "$REPO_ROOT/.ai/reports"
+
+  python3 - "$selected" "$active_dir" "$REPO_ROOT/.ai/reports/planner_summary.md" <<'PY'
+import pathlib
+import re
+import sys
+
+selected = pathlib.Path(sys.argv[1])
+active_dir = pathlib.Path(sys.argv[2])
+summary_path = pathlib.Path(sys.argv[3])
+text = selected.read_text()
+
+text = re.sub(r"status:\s*OPEN", "status: READY", text, count=1)
+active_path = active_dir / selected.name
+active_path.write_text(text)
+
+issue = re.search(r"issue:\s*(\d+)", text).group(1)
+title = re.search(r'title:\s*"([^"]+)"', text).group(1)
+summary_path.write_text(
+    f"# Planner summary\n\nSelected ISSUE-{issue} for implementation.\n\n- Title: {title}\n- Source: {selected}\n"
+)
+PY
+
+  log "Planner: selected $(basename "$selected") as active issue"
+  return 0
+}
+
 render_prompt() {
   local prompt_file="$1"
 
@@ -216,7 +351,7 @@ run_stage() {
 
   local stage_ok=true
   local stage_out
-  stage_out="$(claude -p "$full_prompt" --model "$stage_model" --dangerously-skip-permissions 2>&1)" \
+  stage_out="$(copilot -C "$REPO_ROOT" --allow-all --autopilot --model "$stage_model" -p "$full_prompt" 2>&1)" \
     || stage_ok=false
 
   if echo "$stage_out" | grep -qi "you've hit your limit\|rate limit\|quota exceeded"; then
@@ -307,7 +442,7 @@ if [[ -f "$REPO_ROOT/VISION.md" ]] && [[ ! -f "$REPO_ROOT/ROADMAP.md" ]]; then
   budget_time_ok || exit 0
 fi
 
-run_stage "issue" || { log "Pipeline stopped: issue stage failed"; exit 1; }
+sync_issue_cache || { log "Pipeline stopped: issue sync failed"; exit 1; }
 budget_time_ok || exit 0
 
 _active_count="$(count_markdown_files "$REPO_ROOT/.ai/active")"
@@ -322,14 +457,14 @@ else
     log "Planning gate: manual tasks pending ($_manual_task_count) — running po intake"
     run_stage "po" || { log "Pipeline stopped: po stage failed"; exit 1; }
     budget_time_ok || exit 0
-    run_stage "issue" || { log "Pipeline stopped: issue resync failed"; exit 1; }
+    sync_issue_cache || { log "Pipeline stopped: issue resync failed"; exit 1; }
     budget_time_ok || exit 0
     _issue_count="$(count_markdown_files "$REPO_ROOT/.ai/issues/open")"
   elif [[ "$_issue_count" -le "$ISSUE_BUFFER_MIN" ]]; then
     log "Planning gate: issue pool low (open=$_issue_count, target=$ISSUE_BUFFER_MIN) — running po"
     run_stage "po" || { log "Pipeline stopped: po stage failed"; exit 1; }
     budget_time_ok || exit 0
-    run_stage "issue" || { log "Pipeline stopped: issue resync failed"; exit 1; }
+    sync_issue_cache || { log "Pipeline stopped: issue resync failed"; exit 1; }
     budget_time_ok || exit 0
     _issue_count="$(count_markdown_files "$REPO_ROOT/.ai/issues/open")"
   else
@@ -338,7 +473,7 @@ else
   fi
 
   if [[ "$_issue_count" -gt 0 ]]; then
-    run_stage "planner" || { log "Pipeline stopped: planner stage failed"; exit 1; }
+    select_active_issue || { log "Pipeline stopped: planner failed"; exit 1; }
     budget_time_ok || exit 0
   else
     log "Planning gate: no open issues available after sync"

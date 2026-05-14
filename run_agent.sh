@@ -8,7 +8,7 @@
 #   -p <project> Project config ID         (projects/<project>/.ai/config.env)
 #   -l <path>    Lock file path            (default: /tmp/run_agent[_project].lock)
 #   -o <path>    Output log directory      (default: /tmp/run_agent_logs[/project])
-#   -m <model>   Claude model to use       (default: claude-sonnet-4-6)
+#   -m <model>   Copilot model to use      (default: gpt-5.4)
 #   -t <secs>    Max runtime in seconds    (default: 3600)
 #   -h           Show this help
 
@@ -22,7 +22,7 @@ source "$PROJECT_ROOT/lib/common.sh"
 
 LOCK_FILE=""
 LOG_DIR=""
-MODEL="claude-sonnet-4-6"
+MODEL="gpt-5.4"
 MAX_RUNTIME=3600
 INSTRUCTIONS_FILE=""
 PROJECT_ID="${PROJECT_ID:-}"
@@ -124,9 +124,9 @@ if [[ "$INSTRUCTIONS_FILE" == *.sh ]]; then
   CMD=(timeout "$MAX_RUNTIME" bash "$INSTRUCTIONS_FILE")
   [[ -n "$PROJECT_ID" ]] && CMD+=(-p "$PROJECT_ID")
 else
-  log "Mode: claude prompt (model=$MODEL)"
+  log "Mode: copilot prompt (model=$MODEL)"
   PROMPT="$(cat "$INSTRUCTIONS_FILE")"
-  CMD=(timeout "$MAX_RUNTIME" claude --model "$MODEL" -p "$PROMPT")
+  CMD=(timeout "$MAX_RUNTIME" copilot --allow-all --autopilot --model "$MODEL" -p "$PROMPT")
 fi
 
 if "${CMD[@]}" 2>&1 | tee -a "$LOG_FILE"; then

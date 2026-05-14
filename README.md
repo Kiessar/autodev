@@ -211,7 +211,7 @@ FORCE_SYNC=1 ./run_agent.sh -p yourproject ./orchestrate.sh
 | `MAX_RUNTIME_SECS` | `2700` | Hard runtime limit |
 | `SYNC_INTERVAL_SECS` | `14400` | Minimum delay between repo syncs |
 | `ISSUE_BUFFER_MIN` | `3` | When PO replenishes issues |
-| `MODEL` | `claude-sonnet-4-6` | Fallback model |
+| `MODEL` | `gpt-5.4` | Fallback model |
 | `MODEL_<STAGE>` | see `orchestrate.sh` | Per-stage model override |
 | `SKIP_STAGES` | *(empty)* | Space-separated stages to skip |
 | `DRY_RUN` | `0` | Print prompts without calling Claude |
