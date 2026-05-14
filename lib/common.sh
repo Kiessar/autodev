@@ -11,6 +11,39 @@ resolve_path_from_root() {
   fi
 }
 
+resolve_project_id() {
+  local value="$1"
+
+  if [[ -z "$value" ]]; then
+    return 1
+  fi
+
+  value="${value%/}"
+
+  if [[ "$value" == */.ai ]]; then
+    basename "$(dirname "$value")"
+    return 0
+  fi
+
+  if [[ "$value" == */.ai/config.env ]]; then
+    basename "$(dirname "$(dirname "$value")")"
+    return 0
+  fi
+
+  if [[ "$value" == */repo ]]; then
+    basename "$(dirname "$value")"
+    return 0
+  fi
+
+  if [[ "$value" == projects/* ]]; then
+    value="${value#projects/}"
+    printf '%s\n' "${value%%/*}"
+    return 0
+  fi
+
+  printf '%s\n' "$value"
+}
+
 inactive_projects_file() {
   local project_root="$1"
   printf '%s/projects/inactive-projects.txt\n' "$project_root"
@@ -153,7 +186,12 @@ ensure_work_branch() {
 ensure_project_checkout() {
   local project_root="$1"
 
-  mkdir -p "$(dirname "$REPO_ROOT")" "$PROJECT_STATE_DIR"
+  if [[ -z "$GH_REPO" ]]; then
+    echo "ERROR: GH_REPO is not set for $PROJECT_ID." >&2
+    return 1
+  fi
+
+  mkdir -p "$PROJECT_HOME_DIR/.ai" "$(dirname "$REPO_ROOT")" "$PROJECT_STATE_DIR"
 
   if [[ ! -d "$REPO_ROOT/.git" ]]; then
     gh repo clone "$GH_REPO" "$REPO_ROOT" >/dev/null

@@ -104,6 +104,7 @@ Before merging an autodev PR into `main`:
 
 ## Operational notes
 
+- Initialize or refresh a managed checkout with `./setup_project.sh <project>`.
 - Pause one project with `./toggle.sh -p <project>`.
 - Run a project manually with `./run_agent.sh -p <project> ./orchestrate.sh`.
 - Force a checkout sync with `FORCE_SYNC=1`.

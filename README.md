@@ -85,6 +85,16 @@ Fill in `VISION.md`. `ROADMAP.md` and `ARCHITECTURE.md` can be bootstrapped auto
 ./run_agent.sh -p yourproject ./orchestrate.sh
 ```
 
+### 4b. Set up or refresh the local checkout
+
+```bash
+./setup_project.sh yourproject
+# or
+./setup_project.sh projects/yourproject
+```
+
+This loads `projects/yourproject/.ai/config.env`, ensures local control files exist, and clones or pulls `projects/yourproject/repo`.
+
 ### 5. Schedule it
 
 ```cron
@@ -157,6 +167,9 @@ This replaces the old global notes mechanism. Persistent instructions now belong
 ## Useful commands
 
 ```bash
+# Set up or refresh a project checkout
+./setup_project.sh yourproject
+
 # Dry-run a project
 DRY_RUN=1 ./run_agent.sh -p yourproject ./orchestrate.sh
 
