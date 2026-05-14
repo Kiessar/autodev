@@ -1,4 +1,6 @@
 state/agent_log.md
 state/progress.md
-projects/*
+projects/**
 !projects/.gitkeep
+state/projects/**
+!state/projects/.gitkeep
