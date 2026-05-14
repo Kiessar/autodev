@@ -31,7 +31,7 @@ if ! project_is_active "$PROJECT_ROOT" "$PROJECT_ID"; then
   exit 1
 fi
 
-mkdir -p "$PROJECT_HOME_DIR/.ai" "$PROJECT_STATE_DIR"
+mkdir -p "$PROJECT_HOME_DIR/.ai" "$PROJECT_HOME_DIR/.ai/roles" "$PROJECT_STATE_DIR"
 touch "$(inactive_projects_file "$PROJECT_ROOT")"
 
 if [[ ! -f "$PROJECT_HOME_DIR/.ai/manualtasks.md" ]]; then
@@ -58,6 +58,7 @@ fi
 
 echo "Project: $PROJECT_ID"
 echo "Config: $PROJECT_HOME_DIR/.ai/config.env"
+echo "Role overlays: $PROJECT_HOME_DIR/.ai/roles"
 echo "Repo: $REPO_ROOT"
 echo "Branch: $(git -C "$REPO_ROOT" branch --show-current)"
 echo "Remote: $(git -C "$REPO_ROOT" remote get-url origin)"

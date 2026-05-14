@@ -26,11 +26,12 @@ PROJECT_ID="$1"
 GH_REPO_VALUE="${2:-}"
 PROJECT_HOME_DIR="$PROJECT_ROOT/projects/$PROJECT_ID"
 PROJECT_AI_DIR="$PROJECT_HOME_DIR/.ai"
+PROJECT_ROLES_DIR="$PROJECT_AI_DIR/roles"
 CONFIG_FILE="$PROJECT_AI_DIR/config.env"
 MANUAL_TASKS_FILE="$PROJECT_AI_DIR/manualtasks.md"
 INACTIVE_FILE="$PROJECT_ROOT/projects/inactive-projects.txt"
 
-mkdir -p "$PROJECT_AI_DIR"
+mkdir -p "$PROJECT_AI_DIR" "$PROJECT_ROLES_DIR"
 touch "$INACTIVE_FILE"
 
 if [[ -e "$CONFIG_FILE" ]]; then
@@ -67,6 +68,7 @@ fi
 echo "Created managed project: $PROJECT_ID"
 echo "Config: $CONFIG_FILE"
 echo "Manual tasks: $MANUAL_TASKS_FILE"
+echo "Role overlays: $PROJECT_ROLES_DIR"
 if [[ -z "$GH_REPO_VALUE" ]]; then
   echo "Next: edit GH_REPO in $CONFIG_FILE before running the project."
 fi

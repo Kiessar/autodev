@@ -10,6 +10,12 @@ Autodev manages many projects from one control repository.
 - Per-project runtime state lives in `state/projects/<project>/`.
 - The runner resolves a project ID first, then derives `GH_REPO`, `REPO_ROOT`, branch names, sync cadence, and issue buffer settings from config.
 
+## Project-specific role overlays
+
+- Optional project-specific participant instructions live in `projects/<project>/.ai/roles/<role>.md`.
+- Role prompts should load the shared participant playbook first and then the project-specific overlay if it exists.
+- Use overlays only for project-specific guidance, not for globally shared process rules.
+
 ## Repository sync
 
 - Treat `projects/<project>/repo` as an offline working cache.

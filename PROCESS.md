@@ -19,6 +19,7 @@ The control repo can manage multiple GitHub repositories at once.
 ```text
 projects/<project>/.ai/config.env   local project definition
 projects/<project>/.ai/manualtasks.md
+projects/<project>/.ai/roles/<role>.md
 projects/<project>/repo             offline cached checkout
 state/projects/<project>/           project-local runtime logs and sync markers
 ```
@@ -29,6 +30,7 @@ Each project gets:
 - its own lock file
 - its own local cached checkout
 - its own local operator intake file at `projects/<project>/.ai/manualtasks.md`
+- its own optional role overlays at `projects/<project>/.ai/roles/<role>.md`
 - its own `.ai/` workspace inside the managed repository
 
 ## Auto-dev stages
@@ -80,6 +82,7 @@ This keeps the loop efficient and avoids wasting a full repo pull on every cron 
 - GitHub issues are the executable backlog.
 - The local issue cache is only for offline planning and reduced API churn.
 - `projects/<project>/.ai/manualtasks.md` is a one-shot intake source for the PO.
+- `projects/<project>/.ai/roles/<role>.md` can further specialize a shared role for one project.
 - The PO should spend time on vision analysis and creating new issues only when the queue is running low.
 - Pending manual tasks are still converted on the next run even if the issue pool is already healthy.
 - Each run should still focus on a single issue so implementation + review + QA can stay tight.

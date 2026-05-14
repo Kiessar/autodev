@@ -106,10 +106,11 @@ Use one cron line per project. Locks and logs are isolated per project automatic
 
 ## Manual one-shot tasks
 
-Each project also gets a local operator intake file:
+Each project also gets local operator files:
 
 ```text
 projects/<project>/.ai/manualtasks.md
+projects/<project>/.ai/roles/<role>.md
 ```
 
 Use the `## Pending` section for one-shot requests such as:
@@ -121,12 +122,30 @@ Use the `## Pending` section for one-shot requests such as:
 
 On the next run, the PO converts those entries into real GitHub issues, then moves them into `## Processed` so they are only ingested once.
 
+## Project-specific role overlays
+
+Each role can also be extended per project with an optional file in:
+
+```text
+projects/<project>/.ai/roles/
+```
+
+Examples:
+
+```text
+projects/<project>/.ai/roles/developer.md
+projects/<project>/.ai/roles/reviewer.md
+projects/<project>/.ai/roles/po.md
+```
+
+Those files are loaded in addition to the shared role playbooks and are the right place for project-specific instructions, conventions, or constraints for that role.
+
 ## Runtime layout
 
 ### Control repo
 
 ```text
-projects/<project>/.ai/  local project config + manual tasks (gitignored)
+projects/<project>/.ai/  local project config, manual tasks, and role overlays (gitignored)
 projects/<project>/repo  cached local clone (gitignored)
 state/projects/<project> per-project logs, progress, sync state (gitignored)
 playbooks/               modular participant and reference docs
@@ -147,7 +166,7 @@ playbooks/               modular participant and reference docs
 
 ## Modular participant docs
 
-Each participant has its own markdown file under `playbooks/participants/`. Shared guidance lives under `playbooks/reference/`. The stage prompts in `.agents/` are now thin loaders so agents only pull the references they need.
+Each participant has its own markdown file under `playbooks/participants/`. Shared guidance lives under `playbooks/reference/`. The stage prompts in `.agents/` are now thin loaders so agents only pull the references they need, plus an optional project-specific overlay from `projects/<project>/.ai/roles/`.
 
 This replaces the old global notes mechanism. Persistent instructions now belong in tracked playbooks instead of `notes/`.
 

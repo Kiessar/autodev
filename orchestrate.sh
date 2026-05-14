@@ -33,7 +33,6 @@ BASE_BRANCH="${BASE_BRANCH:-main}"
 SYNC_INTERVAL_SECS="${SYNC_INTERVAL_SECS:-14400}"
 ISSUE_BUFFER_MIN="${ISSUE_BUFFER_MIN:-3}"
 
-MODEL_SCRAPER_BUILDER="${MODEL_SCRAPER_BUILDER:-claude-sonnet-4-6}"
 MODEL_BOOTSTRAP="${MODEL_BOOTSTRAP:-claude-haiku-4-5-20251001}"
 MODEL_PO="${MODEL_PO:-claude-haiku-4-5-20251001}"
 MODEL_PLANNER="${MODEL_PLANNER:-claude-haiku-4-5-20251001}"
@@ -267,6 +266,7 @@ fi
 
 mkdir -p \
   "$PROJECT_HOME_DIR/.ai" \
+  "$PROJECT_HOME_DIR/.ai/roles" \
   "$REPO_ROOT/.ai/active" \
   "$REPO_ROOT/.ai/done" \
   "$REPO_ROOT/.ai/issues/open" \
@@ -305,18 +305,6 @@ if [[ -f "$REPO_ROOT/VISION.md" ]] && [[ ! -f "$REPO_ROOT/ROADMAP.md" ]]; then
   log "Bootstrap gate: VISION.md found, ROADMAP.md missing — running bootstrap"
   run_stage "bootstrap" || { log "Pipeline stopped: bootstrap failed"; exit 1; }
   budget_time_ok || exit 0
-fi
-
-if [[ -f "$REPO_ROOT/new_sources.md" ]]; then
-  _pending_urls="$(awk '/^## Pending/{f=1;next} /^## /{f=0} f && /^https?:/' "$REPO_ROOT/new_sources.md" | wc -l | tr -d ' ')"
-else
-  _pending_urls=0
-fi
-if [[ "$_pending_urls" -gt 0 ]]; then
-  run_stage "scraper_builder" || { log "Pipeline stopped: scraper_builder failed"; exit 1; }
-  budget_time_ok || exit 0
-else
-  log "Skipping scraper_builder: queue empty"
 fi
 
 run_stage "issue" || { log "Pipeline stopped: issue stage failed"; exit 1; }
