@@ -17,9 +17,10 @@ Two independent processes can coexist on the same server:
 The control repo can manage multiple GitHub repositories at once.
 
 ```text
-config/projects/<project>.env   tracked project definition
-projects/<project>/repo         offline cached checkout
-state/projects/<project>/       project-local runtime logs and sync markers
+projects/<project>/.ai/config.env   local project definition
+projects/<project>/.ai/manualtasks.md
+projects/<project>/repo             offline cached checkout
+state/projects/<project>/           project-local runtime logs and sync markers
 ```
 
 Each project gets:
@@ -70,7 +71,7 @@ This keeps the loop efficient and avoids wasting a full repo pull on every cron 
 
 ## Project activation guard
 
-- `config/projects/inactive-projects.txt` is the project deactivation list.
+- `projects/inactive-projects.txt` is the project deactivation list.
 - If a project ID is listed there, `run_agent.sh -p <project>` exits before any AI stage starts.
 - This is the safety valve for preventing concurrent or unwanted development on a project.
 

@@ -5,7 +5,7 @@
 #   ./run_agent.sh [OPTIONS] <instructions.md|script.sh>
 #
 # Options:
-#   -p <project> Project config ID         (config/projects/<project>.env)
+#   -p <project> Project config ID         (projects/<project>/.ai/config.env)
 #   -l <path>    Lock file path            (default: /tmp/run_agent[_project].lock)
 #   -o <path>    Output log directory      (default: /tmp/run_agent_logs[/project])
 #   -m <model>   Claude model to use       (default: claude-sonnet-4-6)

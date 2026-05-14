@@ -14,7 +14,7 @@ usage() {
 Usage: ./toggle.sh [-p project]
 
 - Without -p, toggles the global pipeline flag.
-- With -p, toggles only that project's pipeline flag.
+- With -p, toggles the project in projects/inactive-projects.txt.
 EOF
 }
 

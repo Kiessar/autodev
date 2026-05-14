@@ -22,7 +22,7 @@ bootstrap → issue → po → planner → developer → reviewer → qa → git
 
 ## How project management works
 
-- Tracked project definitions live in `config/projects/<project>.env`.
+- Project-local config lives in `projects/<project>/.ai/config.env`.
 - Cached clones live in `projects/<project>/repo` and are gitignored.
 - Local operator files live in `projects/<project>/.ai/` and are gitignored.
 - Per-project runtime state lives in `state/projects/<project>/`.
@@ -41,28 +41,25 @@ gh auth login
 
 ### 2. Register a project
 
-Copy the example config and edit it:
+Create the local project scaffold:
 
 ```bash
-cp config/projects/example.env config/projects/yourproject.env
+./create_project.sh yourproject your-org/your-repo
 ```
 
-Set at least:
+That creates:
 
-```bash
-PROJECT_ID="yourproject"
-GH_REPO="your-org/your-repo"
-PROJECT_REPO_DIR="projects/yourproject/repo"
-PROJECT_STATE_DIR="state/projects/yourproject"
-BASE_BRANCH="main"
-WORK_BRANCH="develop"
+```text
+projects/yourproject/.ai/config.env
+projects/yourproject/.ai/manualtasks.md
+projects/inactive-projects.txt
 ```
 
-On the first run, autodev will clone the repo with `gh repo clone` into the configured cache path.
+Edit `projects/yourproject/.ai/config.env` if you want to change branch names, sync cadence, or per-run limits.
 
 ### 2b. Project activation
 
-Projects listed in `config/projects/inactive-projects.txt` are paused before any AI stage starts.
+Projects listed in `projects/inactive-projects.txt` are paused before any AI stage starts.
 
 ```bash
 ./toggle.sh -p yourproject
@@ -119,8 +116,8 @@ On the next run, the PO converts those entries into real GitHub issues, then mov
 ### Control repo
 
 ```text
-config/projects/         tracked project definitions
-projects/<project>/repo  cached local clones (gitignored)
+projects/<project>/.ai/  local project config + manual tasks (gitignored)
+projects/<project>/repo  cached local clone (gitignored)
 state/projects/<project> per-project logs, progress, sync state (gitignored)
 playbooks/               modular participant and reference docs
 ```

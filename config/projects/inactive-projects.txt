@@ -1,3 +1,0 @@
-# Add one project ID per line to pause it before any AI stage runs.
-# Example:
-# yourproject

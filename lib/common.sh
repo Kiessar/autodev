@@ -13,26 +13,28 @@ resolve_path_from_root() {
 
 inactive_projects_file() {
   local project_root="$1"
-  printf '%s/config/projects/inactive-projects.txt\n' "$project_root"
+  printf '%s/projects/inactive-projects.txt\n' "$project_root"
 }
 
 available_project_ids() {
   local project_root="$1"
-  local config_dir="$project_root/config/projects"
+  local projects_dir="$project_root/projects"
 
-  if [[ ! -d "$config_dir" ]]; then
+  if [[ ! -d "$projects_dir" ]]; then
     return 0
   fi
 
-  find "$config_dir" -maxdepth 1 -type f -name "*.env" -printf '%f\n' \
-    | sed 's/\.env$//' \
+  find "$projects_dir" -mindepth 3 -maxdepth 3 -type f -name "config.env" -print \
+    | while read -r config_path; do
+        basename "$(dirname "$(dirname "$config_path")")"
+      done \
     | sort
 }
 
 load_project_config() {
   local project_root="$1"
   local project_id="$2"
-  local config_path="$project_root/config/projects/$project_id.env"
+  local config_path="$project_root/projects/$project_id/.ai/config.env"
 
   local override_max_tasks="${MAX_TASKS:-}"
   local override_max_reviews="${MAX_REVIEWS_PER_RUN:-}"
@@ -58,8 +60,8 @@ load_project_config() {
 
   PROJECT_ID="${PROJECT_ID:-$project_id}"
   GH_REPO="${GH_REPO:-}"
-  PROJECT_REPO_DIR="${PROJECT_REPO_DIR:-projects/$PROJECT_ID/repo}"
-  PROJECT_HOME_DIR="${PROJECT_HOME_DIR:-$(dirname "$PROJECT_REPO_DIR")}"
+  PROJECT_HOME_DIR="${PROJECT_HOME_DIR:-projects/$PROJECT_ID}"
+  PROJECT_REPO_DIR="${PROJECT_REPO_DIR:-$PROJECT_HOME_DIR/repo}"
   PROJECT_STATE_DIR="${PROJECT_STATE_DIR:-state/projects/$PROJECT_ID}"
   WORK_BRANCH="${WORK_BRANCH:-develop}"
   BASE_BRANCH="${BASE_BRANCH:-main}"
@@ -81,11 +83,6 @@ load_project_config() {
   REPO_ROOT="${REPO_ROOT:-$(resolve_path_from_root "$project_root" "$PROJECT_REPO_DIR")}"
   PROJECT_HOME_DIR="$(resolve_path_from_root "$project_root" "$PROJECT_HOME_DIR")"
   PROJECT_STATE_DIR="$(resolve_path_from_root "$project_root" "$PROJECT_STATE_DIR")"
-
-  if [[ -z "$GH_REPO" ]]; then
-    echo "ERROR: GH_REPO is required in $config_path" >&2
-    return 1
-  fi
 
   export PROJECT_ID GH_REPO REPO_ROOT PROJECT_HOME_DIR PROJECT_STATE_DIR WORK_BRANCH BASE_BRANCH
   export SYNC_INTERVAL_SECS ISSUE_BUFFER_MIN MAX_TASKS MAX_REVIEWS_PER_RUN

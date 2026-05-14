@@ -4,7 +4,7 @@ Autodev manages many projects from one control repository.
 
 ## Project resolution
 
-- Tracked project definitions live in `config/projects/<project>.env`.
+- Project-local config lives in `projects/<project>/.ai/config.env`.
 - Cached local clones live in `projects/<project>/repo`.
 - Project-local operator files live in `projects/<project>/.ai/`.
 - Per-project runtime state lives in `state/projects/<project>/`.
