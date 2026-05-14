@@ -2,5 +2,6 @@ state/agent_log.md
 state/progress.md
 projects/**
 !projects/.gitkeep
+!projects/inactive-projects.txt
 state/projects/**
 !state/projects/.gitkeep
