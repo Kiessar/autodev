@@ -126,7 +126,8 @@ if [[ "$INSTRUCTIONS_FILE" == *.sh ]]; then
 else
   log "Mode: copilot prompt (model=$MODEL)"
   PROMPT="$(cat "$INSTRUCTIONS_FILE")"
-  CMD=(timeout "$MAX_RUNTIME" copilot --allow-all --autopilot --model "$MODEL" -p "$PROMPT")
+  RETRY_LOG_MSG="Prompt run retrying with model=auto (previous model: $MODEL)"
+  CMD=(bash -lc "$(printf 'timeout %q copilot --allow-all --autopilot --model %q -p %q || { rc=$?; printf %q\"\\n\" >&2; timeout %q copilot --allow-all --autopilot --model auto -p %q; exit $?; }' "$MAX_RUNTIME" "$MODEL" "$PROMPT" "$RETRY_LOG_MSG" "$MAX_RUNTIME" "$PROMPT")")
 fi
 
 if "${CMD[@]}" 2>&1 | tee -a "$LOG_FILE"; then

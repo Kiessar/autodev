@@ -336,6 +336,7 @@ run_stage() {
   stage_upper="$(echo "$stage" | tr '[:lower:]' '[:upper:]')"
   local stage_model_var="MODEL_${stage_upper}"
   local stage_model="${!stage_model_var:-$MODEL}"
+  local effective_model="$stage_model"
   local full_prompt
   full_prompt="$(render_prompt "$prompt_file")"
 
@@ -351,8 +352,18 @@ run_stage() {
 
   local stage_ok=true
   local stage_out
-  stage_out="$(copilot -C "$REPO_ROOT" --allow-all --autopilot --model "$stage_model" -p "$full_prompt" 2>&1)" \
+  stage_out="$(copilot -C "$REPO_ROOT" --allow-all --autopilot --model "$effective_model" -p "$full_prompt" 2>&1)" \
     || stage_ok=false
+
+  if echo "$stage_out" | grep -qi "model .* is not available\|you've hit your limit\|rate limit\|quota exceeded"; then
+    if [[ "$effective_model" != "auto" ]]; then
+      log "~~~ Stage retrying with model=auto: $stage | previous_model=$effective_model"
+      effective_model="auto"
+      stage_ok=true
+      stage_out="$(copilot -C "$REPO_ROOT" --allow-all --autopilot --model "$effective_model" -p "$full_prompt" 2>&1)" \
+        || stage_ok=false
+    fi
+  fi
 
   if echo "$stage_out" | grep -qi "you've hit your limit\|rate limit\|quota exceeded"; then
     log "~~~ Stage paused (rate limited): $stage | will retry next run"
@@ -362,7 +373,7 @@ run_stage() {
 
   if $stage_ok; then
     echo "$stage_out" | tail -5
-    log "<<< Stage done: $stage | model=$stage_model | elapsed=$(elapsed)s"
+    log "<<< Stage done: $stage | model=$effective_model | elapsed=$(elapsed)s"
     if [[ "$stage_kind" == "implementation" ]]; then
       TASKS_COMPLETED=$(( TASKS_COMPLETED + 1 ))
     elif [[ "$stage_kind" == "review" ]]; then
