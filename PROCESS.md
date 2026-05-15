@@ -63,13 +63,10 @@ develop  <- long-lived autodev work branch
 ## Offline cache and sync policy
 
 - The managed repository is cloned once with `gh repo clone`.
-- Autodev keeps that checkout locally and does not pull every run.
-- Sync happens only when:
-  - the configured sync interval has elapsed
-  - the working tree is clean
-  - there is no active issue already in progress
+- Autodev keeps that checkout locally and refreshes it from GitHub before every run.
+- If the checkout has local tracked or untracked changes, it stashes them, updates from the remote branch, and restores them afterward.
 
-This keeps the loop efficient and avoids wasting a full repo pull on every cron tick.
+This keeps the developer on the latest upstream source without discarding local autodev artifacts between runs.
 
 ## Project activation guard
 

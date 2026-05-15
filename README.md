@@ -55,7 +55,7 @@ projects/yourproject/.ai/manualtasks.md
 projects/inactive-projects.txt
 ```
 
-Edit `projects/yourproject/.ai/config.env` if you want to change branch names, sync cadence, or per-run limits.
+Edit `projects/yourproject/.ai/config.env` if you want to change branch names or per-run limits.
 
 ### 2b. Project activation
 
@@ -180,8 +180,8 @@ This replaces the old global notes mechanism. Persistent instructions now belong
 ## Sync policy
 
 - The managed repo is stored offline in `projects/<project>/repo`.
-- Autodev does not pull the repository every loop.
-- It syncs only after the configured interval, and only when the checkout is clean and no active issue is already in flight.
+- Autodev refreshes the checkout from GitHub before every run.
+- If local tracked or untracked changes exist, it stashes them, updates the branch from origin, then restores the local work.
 
 ## Useful commands
 
@@ -209,10 +209,10 @@ FORCE_SYNC=1 ./run_agent.sh -p yourproject ./orchestrate.sh
 | `MAX_TASKS` | `1` | Max implementation issues per run |
 | `MAX_REVIEWS_PER_RUN` | `2` | Max review stages per run |
 | `MAX_RUNTIME_SECS` | `2700` | Hard runtime limit |
-| `SYNC_INTERVAL_SECS` | `14400` | Minimum delay between repo syncs |
+| `SYNC_INTERVAL_SECS` | `14400` | Reserved for sync-related tooling; repo refresh now runs before every execution |
 | `ISSUE_BUFFER_MIN` | `3` | When PO replenishes issues |
 | `MODEL` | `gpt-5.4` | Fallback model |
 | `MODEL_<STAGE>` | see `orchestrate.sh` | Per-stage model override |
 | `SKIP_STAGES` | *(empty)* | Space-separated stages to skip |
 | `DRY_RUN` | `0` | Print prompts without calling Claude |
-| `FORCE_SYNC` | `0` | Sync the cached checkout before the run |
+| `FORCE_SYNC` | `0` | Kept for compatibility; normal runs already sync before execution |

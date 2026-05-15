@@ -215,19 +215,47 @@ select_active_issue() {
   fi
 
   local selected
-  selected="$(python3 - "$open_dir" <<'PY'
+  selected="$(python3 - "$open_dir" "$REPO_ROOT/VISION.md" "$REPO_ROOT/.ai/done" <<'PY'
 import pathlib
 import re
 import sys
 
 open_dir = pathlib.Path(sys.argv[1])
+vision_path = pathlib.Path(sys.argv[2])
+done_dir = pathlib.Path(sys.argv[3])
 files = sorted(open_dir.glob("ISSUE-*.md"))
+
+stop_words = {
+    "about", "after", "again", "against", "would", "their", "there", "these",
+    "those", "because", "should", "could", "through", "while", "where", "when",
+    "which", "what", "with", "this", "that", "from", "into", "only", "than",
+    "then", "have", "will", "your", "they", "them", "been", "being", "also",
+    "over", "under", "more", "most", "such", "just", "very", "each", "core",
+    "platform", "feature", "features", "pareaide", "families", "family"
+}
+
+vision_terms = set()
+if vision_path.exists():
+    vision_terms = {
+        token for token in re.findall(r"[a-z0-9]{4,}", vision_path.read_text().lower())
+        if token not in stop_words
+    }
+
+done_issues = set()
+for path in done_dir.glob("ISSUE-*.md"):
+    match = re.search(r"ISSUE-(\d+)", path.name)
+    if match:
+        done_issues.add(int(match.group(1)))
 
 def score(path: pathlib.Path):
     text = path.read_text()
     issue_number = int(re.search(r"issue:\s*(\d+)", text).group(1))
+    if issue_number in done_issues:
+        return None
     title_match = re.search(r'title:\s*"([^"]+)"', text)
     title = title_match.group(1) if title_match else ""
+    body = text.lower()
+    overlap = sum(1 for term in vision_terms if term in body)
     if title.startswith("Design:"):
         priority = 0
     elif title.startswith("Task:"):
@@ -236,10 +264,12 @@ def score(path: pathlib.Path):
         priority = 2
     else:
         priority = 3
-    return (priority, issue_number, str(path))
+    return (-overlap, priority, issue_number, str(path))
 
-if files:
-    print(min(score(path) for path in files)[2])
+scores = [score(path) for path in files]
+scores = [entry for entry in scores if entry is not None]
+if scores:
+    print(min(scores)[3])
 PY
 )"
 

@@ -204,37 +204,43 @@ ensure_project_checkout() {
 sync_project_checkout_if_due() {
   local now
   now="$(date +%s)"
-
-  if [[ "${FORCE_SYNC:-0}" == "1" ]]; then
-    :
-  elif [[ -f "$PROJECT_STATE_DIR/last_sync_at" ]]; then
-    local last_sync
-    last_sync="$(cat "$PROJECT_STATE_DIR/last_sync_at" 2>/dev/null || echo 0)"
-    if [[ $(( now - last_sync )) -lt "$SYNC_INTERVAL_SECS" ]]; then
-      return 0
-    fi
-  fi
+  local stashed=0
+  local stash_ref=""
+  local stash_label="autodev-sync-$PROJECT_ID-$now"
+  local sync_ok=0
 
   if repo_has_local_changes "$REPO_ROOT"; then
-    echo "[autodev] Skipping sync for $PROJECT_ID: working tree is not clean." >&2
-    return 0
-  fi
-
-  if project_has_active_task "$REPO_ROOT"; then
-    echo "[autodev] Skipping sync for $PROJECT_ID: active task already in progress." >&2
-    return 0
-  fi
-
-  git -C "$REPO_ROOT" fetch --prune origin >/dev/null
-  ensure_work_branch "$REPO_ROOT" "$WORK_BRANCH" "$BASE_BRANCH"
-
-  if git -C "$REPO_ROOT" show-ref --verify --quiet "refs/remotes/origin/$WORK_BRANCH"; then
-    if ! git -C "$REPO_ROOT" merge --ff-only "origin/$WORK_BRANCH" >/dev/null 2>&1; then
-      echo "[autodev] Skipping fast-forward for $PROJECT_ID: local $WORK_BRANCH is ahead or diverged." >&2
-      return 0
+    git -C "$REPO_ROOT" stash push --include-untracked -m "$stash_label" >/dev/null
+    stash_ref="$(git -C "$REPO_ROOT" stash list --format='%gd %gs' | awk -v label="$stash_label" '$0 ~ label { print $1; exit }')"
+    if [[ -n "$stash_ref" ]]; then
+      stashed=1
+      echo "[autodev] Stashed local changes for $PROJECT_ID before sync." >&2
     fi
-  elif git -C "$REPO_ROOT" show-ref --verify --quiet "refs/remotes/origin/$BASE_BRANCH"; then
-    git -C "$REPO_ROOT" checkout "$WORK_BRANCH" >/dev/null 2>&1
+  fi
+
+  if git -C "$REPO_ROOT" fetch --prune origin >/dev/null 2>&1; then
+    ensure_work_branch "$REPO_ROOT" "$WORK_BRANCH" "$BASE_BRANCH"
+
+    if git -C "$REPO_ROOT" show-ref --verify --quiet "refs/remotes/origin/$WORK_BRANCH"; then
+      git -C "$REPO_ROOT" pull --rebase origin "$WORK_BRANCH" >/dev/null 2>&1
+    elif git -C "$REPO_ROOT" show-ref --verify --quiet "refs/remotes/origin/$BASE_BRANCH"; then
+      git -C "$REPO_ROOT" rebase "origin/$BASE_BRANCH" >/dev/null 2>&1
+    fi
+    sync_ok=1
+  fi
+
+  if [[ "$stashed" -eq 1 ]]; then
+    if ! git -C "$REPO_ROOT" stash pop --index "$stash_ref" >/dev/null 2>&1; then
+      echo "[autodev] ERROR: Restoring stashed local changes failed for $PROJECT_ID." >&2
+      echo "[autodev] Resolve conflicts in $REPO_ROOT before the next run." >&2
+      return 1
+    fi
+    echo "[autodev] Restored local changes for $PROJECT_ID after sync." >&2
+  fi
+
+  if [[ "$sync_ok" -ne 1 ]]; then
+    echo "[autodev] ERROR: Failed to sync $PROJECT_ID from origin." >&2
+    return 1
   fi
 
   printf '%s\n' "$now" > "$PROJECT_STATE_DIR/last_sync_at"

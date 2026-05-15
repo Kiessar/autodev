@@ -49,12 +49,7 @@ EOF
 fi
 
 ensure_project_checkout "$PROJECT_ROOT"
-
-if repo_has_local_changes "$REPO_ROOT"; then
-  echo "Repository has local changes; skipping pull to avoid overwriting work."
-else
-  FORCE_SYNC=1 sync_project_checkout_if_due
-fi
+FORCE_SYNC=1 sync_project_checkout_if_due
 
 echo "Project: $PROJECT_ID"
 echo "Config: $PROJECT_HOME_DIR/.ai/config.env"
