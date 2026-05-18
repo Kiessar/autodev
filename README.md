@@ -102,7 +102,7 @@ This loads `projects/yourproject/.ai/config.env`, ensures local control files ex
 0 */2 * * * /home/chris/autodev/run_agent.sh -p yourproject /home/chris/autodev/orchestrate.sh >> /tmp/run_agent_logs/yourproject/cron.log 2>&1
 ```
 
-Use one cron line per project. Locks and logs are isolated per project automatically.
+Use one cron line per project. Locks are stored in `projects/<project>/.ai/run_agent.lock`, so they stay with the project metadata instead of relying on `/tmp`.
 
 ## Manual one-shot tasks
 
@@ -140,6 +140,29 @@ projects/<project>/.ai/roles/po.md
 
 Those files are loaded in addition to the shared role playbooks and are the right place for project-specific instructions, conventions, or constraints for that role.
 
+## Project runtime secrets
+
+For local runtime-only secrets, create:
+
+```text
+projects/<project>/.ai/.env
+```
+
+Example for AutoAITrader:
+
+```bash
+chmod 700 projects/AutoAITrader/.ai
+cat >> projects/AutoAITrader/.ai/.env <<'EOF'
+KRAKEN_PAPER_API_KEY=your-paper-key
+KRAKEN_PAPER_API_SECRET=your-paper-secret
+KRAKEN_LIVE_API_KEY=your-live-key
+KRAKEN_LIVE_API_SECRET=your-live-secret
+EOF
+chmod 600 projects/AutoAITrader/.ai/.env
+```
+
+`run_agent.sh -p <project> ...` sources that file before starting the pipeline, so the managed software can consume environment variables without committing secrets into Git.
+
 ## Runtime layout
 
 ### Control repo
@@ -174,8 +197,8 @@ This replaces the old global notes mechanism. Persistent instructions now belong
 
 - Open GitHub issues are the backlog.
 - The PO only creates more issues when the open issue pool drops below `ISSUE_BUFFER_MIN`.
-- The planner chooses one issue per run.
-- The developer still completes as much useful work as possible inside that single issue to keep request count low.
+- The planner can choose multiple issues in a single run, up to `MAX_TASKS`, as long as time and review budget remain.
+- Each completed issue still goes through reviewer and QA before the runner takes the next one.
 
 ## Sync policy
 
@@ -206,8 +229,8 @@ FORCE_SYNC=1 ./run_agent.sh -p yourproject ./orchestrate.sh
 | `PROJECT_ID` | from `-p` | Project config ID |
 | `REPO_ROOT` | from config | Override the local checkout path |
 | `GH_REPO` | from config | `owner/repo` GitHub repository |
-| `MAX_TASKS` | `1` | Max implementation issues per run |
-| `MAX_REVIEWS_PER_RUN` | `2` | Max review stages per run |
+| `MAX_TASKS` | `3` | Max implementation issues per run |
+| `MAX_REVIEWS_PER_RUN` | `6` | Max review stages per run (reviewer + QA per issue) |
 | `MAX_RUNTIME_SECS` | `2700` | Hard runtime limit |
 | `SYNC_INTERVAL_SECS` | `14400` | Reserved for sync-related tooling; repo refresh now runs before every execution |
 | `ISSUE_BUFFER_MIN` | `3` | When PO replenishes issues |

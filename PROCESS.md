@@ -6,7 +6,7 @@ Two independent processes can coexist on the same server:
 
 | | Production | Auto-dev |
 |---|---|---|
-| **What it does** | Runs the production workload | Works one GitHub issue, reviews it, and updates the PR |
+| **What it does** | Runs the production workload | Works queued GitHub issues, reviews them, and updates the PR |
 | **Source of truth** | `main` branch | Open GitHub issues + cached local checkout |
 | **Cron** | project-specific | project-specific |
 | **DB writes** | Yes, if the app does that in production | No, unless the issue explicitly changes code that later ships |
@@ -27,9 +27,10 @@ state/projects/<project>/           project-local runtime logs and sync markers
 Each project gets:
 
 - its own cron entry
-- its own lock file
+- its own lock file under `projects/<project>/.ai/run_agent.lock`
 - its own local cached checkout
 - its own local operator intake file at `projects/<project>/.ai/manualtasks.md`
+- its own local runtime env file at `projects/<project>/.ai/.env`
 - its own optional role overlays at `projects/<project>/.ai/roles/<role>.md`
 - its own `.ai/` workspace inside the managed repository
 
@@ -42,7 +43,7 @@ bootstrap → issue → po → planner → developer → reviewer → qa → git
 1. **Bootstrap** — if only `VISION.md` exists, generate `ROADMAP.md`, `ARCHITECTURE.md`, and bootstrap status.
 2. **Issue** — sync open GitHub issues into `.ai/issues/open/`.
 3. **PO** — replenish issues only when the open issue pool is low.
-4. **Planner** — select one open issue and create `.ai/active/ISSUE-<n>.md`.
+4. **Planner** — select the next open issue and create `.ai/active/ISSUE-<n>.md`.
 5. **Developer** — implement the active issue on `develop`.
 6. **Reviewer** — verify correctness and tests.
 7. **QA** — audit guidelines, redundancy, coverage, UX, widget usage, backend architecture, and infrastructure fit.
@@ -79,14 +80,15 @@ This keeps the developer on the latest upstream source without discarding local 
 - GitHub issues are the executable backlog.
 - The local issue cache is only for offline planning and reduced API churn.
 - `projects/<project>/.ai/manualtasks.md` is a one-shot intake source for the PO.
+- `projects/<project>/.ai/.env` is the local runtime environment file for secrets that should not be committed.
 - `projects/<project>/.ai/roles/<role>.md` can further specialize a shared role for one project.
 - The PO should spend time on vision analysis and creating new issues only when the queue is running low.
 - Pending manual tasks are still converted on the next run even if the issue pool is already healthy.
-- Each run should still focus on a single issue so implementation + review + QA can stay tight.
+- Each run can process multiple issues when budget allows, but each issue must still pass implementation + review + QA before the next one starts.
 
 ## Review policy
 
-- One implementation issue per run by default.
+- Up to `MAX_TASKS` implementation issues per run.
 - Review stages are budgeted per run with `MAX_REVIEWS_PER_RUN`.
 - Reviewer and QA are distinct:
   - **Reviewer** checks correctness and acceptance criteria.

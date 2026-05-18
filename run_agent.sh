@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# run_agent.sh — runs a Claude Code agent from an instruction file with lock protection
+# run_agent.sh — runs an agent from an instruction file with lock protection
 #
 # Usage:
 #   ./run_agent.sh [OPTIONS] <instructions.md|script.sh>
 #
 # Options:
 #   -p <project> Project config ID         (projects/<project>/.ai/config.env)
-#   -l <path>    Lock file path            (default: /tmp/run_agent[_project].lock)
+#   -l <path>    Lock file path            (default: project-local .ai lock)
 #   -o <path>    Output log directory      (default: /tmp/run_agent_logs[/project])
 #   -m <model>   Copilot model to use      (default: gpt-5.4)
 #   -t <secs>    Max runtime in seconds    (default: 3600)
@@ -30,6 +30,30 @@ PROJECT_ID="${PROJECT_ID:-}"
 usage() {
   grep '^#' "$0" | sed 's/^# \?//'
   exit 0
+}
+
+default_lock_file() {
+  if [[ -n "$PROJECT_ID" ]]; then
+    printf '%s/.ai/run_agent.lock\n' "$PROJECT_HOME_DIR"
+  else
+    printf '%s/state/run_agent.lock\n' "$PROJECT_ROOT"
+  fi
+}
+
+load_project_runtime_env() {
+  if [[ -z "$PROJECT_ID" ]]; then
+    return 0
+  fi
+
+  local env_file="$PROJECT_HOME_DIR/.ai/.env"
+  if [[ ! -f "$env_file" ]]; then
+    return 0
+  fi
+
+  set -a
+  # shellcheck disable=SC1090
+  source "$env_file"
+  set +a
 }
 
 while getopts "p:l:o:m:t:h" opt; do
@@ -66,7 +90,7 @@ if [[ -n "$PROJECT_ID" ]]; then
   fi
 fi
 
-LOCK_FILE="${LOCK_FILE:-/tmp/run_agent${PROJECT_ID:+_${PROJECT_ID}}.lock}"
+LOCK_FILE="${LOCK_FILE:-$(default_lock_file)}"
 LOG_DIR="${LOG_DIR:-/tmp/run_agent_logs${PROJECT_ID:+/$PROJECT_ID}}"
 
 acquire_lock() {
@@ -85,6 +109,7 @@ acquire_lock() {
 
   mkdir -p "$(dirname "$LOCK_FILE")"
   echo $$ > "$LOCK_FILE"
+  chmod 600 "$LOCK_FILE"
   echo "[run_agent] Lock acquired (PID $$)."
 }
 
@@ -112,11 +137,15 @@ if [[ -n "$PROJECT_ID" ]]; then
   export SYNC_INTERVAL_SECS ISSUE_BUFFER_MIN MAX_TASKS MAX_REVIEWS_PER_RUN
 fi
 
+load_project_runtime_env
+
 log "Starting agent run"
 log "Instructions: $INSTRUCTIONS_FILE"
 [[ -n "$PROJECT_ID" ]] && log "Project: $PROJECT_ID ($GH_REPO)"
+[[ -n "${PROJECT_HOME_DIR:-}" && -f "$PROJECT_HOME_DIR/.ai/.env" ]] && log "Project env: $PROJECT_HOME_DIR/.ai/.env"
 log "Model: $MODEL"
 log "Max runtime: ${MAX_RUNTIME}s"
+log "Lock: $LOCK_FILE"
 log "Log: $LOG_FILE"
 
 if [[ "$INSTRUCTIONS_FILE" == *.sh ]]; then

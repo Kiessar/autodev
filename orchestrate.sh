@@ -135,9 +135,25 @@ review_budget_ok() {
   return 0
 }
 
+next_issue_cycle_budget_ok() {
+  implementation_budget_ok || return 1
+  if [[ $(( REVIEWS_COMPLETED + 2 )) -gt "$MAX_REVIEWS_PER_RUN" ]]; then
+    log "BUDGET: Not enough review capacity for another full issue cycle ($REVIEWS_COMPLETED + 2 > $MAX_REVIEWS_PER_RUN)."
+    progress "  planning: stopped (insufficient review budget for another issue)"
+    return 1
+  fi
+  return 0
+}
+
 count_markdown_files() {
   local path="$1"
   find "$path" -maxdepth 1 -type f -name "*.md" 2>/dev/null | wc -l | tr -d ' '
+}
+
+count_active_issues_by_status() {
+  local path="$1"
+  local statuses_regex="$2"
+  find "$path" -maxdepth 1 -type f -name 'ISSUE-*.md' -exec grep -lE "^status:\\s*(${statuses_regex})$" {} \; 2>/dev/null | wc -l | tr -d ' '
 }
 
 sync_issue_cache() {
@@ -208,7 +224,8 @@ select_active_issue() {
   local active_dir="$REPO_ROOT/.ai/active"
   local active_path
 
-  active_path="$(find "$active_dir" -maxdepth 1 -type f -name 'ISSUE-*.md' -print -quit 2>/dev/null || true)"
+  active_path="$(grep -lE '^status:\s*(READY|IN_PROGRESS|REVIEW|QA_REVIEW|READY_FOR_COMMIT)$' \
+    "$active_dir"/ISSUE-*.md 2>/dev/null | head -1 || true)"
   if [[ -n "$active_path" ]]; then
     log "Planner: active issue already present ($(basename "$active_path"))"
     return 0
@@ -483,48 +500,58 @@ if [[ -f "$REPO_ROOT/VISION.md" ]] && [[ ! -f "$REPO_ROOT/ROADMAP.md" ]]; then
   budget_time_ok || exit 0
 fi
 
-sync_issue_cache || { log "Pipeline stopped: issue sync failed"; exit 1; }
-budget_time_ok || exit 0
+while next_issue_cycle_budget_ok; do
+  sync_issue_cache || { log "Pipeline stopped: issue sync failed"; exit 1; }
+  budget_time_ok || exit 0
 
-_active_count="$(count_markdown_files "$REPO_ROOT/.ai/active")"
-_issue_count="$(count_markdown_files "$REPO_ROOT/.ai/issues/open")"
-_manual_task_count="$(count_manual_tasks)"
+  _active_count="$(count_active_issues_by_status "$REPO_ROOT/.ai/active" 'READY|IN_PROGRESS|REVIEW|QA_REVIEW|READY_FOR_COMMIT')"
+  _issue_count="$(count_markdown_files "$REPO_ROOT/.ai/issues/open")"
+  _manual_task_count="$(count_manual_tasks)"
 
-if [[ "$_active_count" -gt 0 ]]; then
-  log "Planning gate: active task already in progress — skipping po/planner"
-  progress "  planning: skipped (active task present)"
-else
-  if [[ "$_manual_task_count" -gt 0 ]]; then
-    log "Planning gate: manual tasks pending ($_manual_task_count) — running po intake"
-    run_stage "po" || { log "Pipeline stopped: po stage failed"; exit 1; }
-    budget_time_ok || exit 0
-    sync_issue_cache || { log "Pipeline stopped: issue resync failed"; exit 1; }
-    budget_time_ok || exit 0
-    _issue_count="$(count_markdown_files "$REPO_ROOT/.ai/issues/open")"
-  elif [[ "$_issue_count" -le "$ISSUE_BUFFER_MIN" ]]; then
-    log "Planning gate: issue pool low (open=$_issue_count, target=$ISSUE_BUFFER_MIN) — running po"
-    run_stage "po" || { log "Pipeline stopped: po stage failed"; exit 1; }
-    budget_time_ok || exit 0
-    sync_issue_cache || { log "Pipeline stopped: issue resync failed"; exit 1; }
-    budget_time_ok || exit 0
-    _issue_count="$(count_markdown_files "$REPO_ROOT/.ai/issues/open")"
+  if [[ "$_active_count" -gt 0 ]]; then
+    log "Planning gate: active task already in progress — skipping po/planner"
+    progress "  planning: skipped (active task present)"
   else
-    log "Planning gate: issue pool sufficient (open=$_issue_count) — skipping po"
-    progress "  planning: skipped (issue pool sufficient)"
+    if [[ "$_manual_task_count" -gt 0 ]]; then
+      log "Planning gate: manual tasks pending ($_manual_task_count) — running po intake"
+      run_stage "po" || { log "Pipeline stopped: po stage failed"; exit 1; }
+      budget_time_ok || exit 0
+      sync_issue_cache || { log "Pipeline stopped: issue resync failed"; exit 1; }
+      budget_time_ok || exit 0
+      _issue_count="$(count_markdown_files "$REPO_ROOT/.ai/issues/open")"
+    elif [[ "$_issue_count" -le "$ISSUE_BUFFER_MIN" ]]; then
+      log "Planning gate: issue pool low (open=$_issue_count, target=$ISSUE_BUFFER_MIN) — running po"
+      run_stage "po" || { log "Pipeline stopped: po stage failed"; exit 1; }
+      budget_time_ok || exit 0
+      sync_issue_cache || { log "Pipeline stopped: issue resync failed"; exit 1; }
+      budget_time_ok || exit 0
+      _issue_count="$(count_markdown_files "$REPO_ROOT/.ai/issues/open")"
+    else
+      log "Planning gate: issue pool sufficient (open=$_issue_count) — skipping po"
+      progress "  planning: skipped (issue pool sufficient)"
+    fi
+
+    if [[ "$_issue_count" -gt 0 ]]; then
+      select_active_issue || { log "Pipeline stopped: planner failed"; exit 1; }
+      budget_time_ok || exit 0
+    else
+      log "Planning gate: no open issues available after sync"
+      progress "  planning: skipped (no open issues)"
+    fi
   fi
 
-  if [[ "$_issue_count" -gt 0 ]]; then
-    select_active_issue || { log "Pipeline stopped: planner failed"; exit 1; }
-    budget_time_ok || exit 0
-  else
-    log "Planning gate: no open issues available after sync"
-    progress "  planning: skipped (no open issues)"
+  _active_count="$(count_active_issues_by_status "$REPO_ROOT/.ai/active" 'READY|IN_PROGRESS|REVIEW|QA_REVIEW|READY_FOR_COMMIT')"
+
+  if [[ "$_active_count" -le 0 ]]; then
+    if [[ "$TASKS_COMPLETED" -eq 0 ]]; then
+      log "Execution gate: no active issue selected — skipping developer/reviewer/qa/git"
+      progress "  execution: skipped (no active issue)"
+    else
+      log "Execution gate: no further active issues available in this run"
+    fi
+    break
   fi
-fi
 
-_active_count="$(count_markdown_files "$REPO_ROOT/.ai/active")"
-
-if [[ "$_active_count" -gt 0 ]]; then
   run_stage "developer" "implementation" || { log "Pipeline stopped: developer stage failed"; exit 1; }
   budget_time_ok || exit 0
 
@@ -536,10 +563,14 @@ if [[ "$_active_count" -gt 0 ]]; then
 
   run_stage "git" || { log "Pipeline stopped: git stage failed"; exit 1; }
   budget_time_ok || exit 0
-else
-  log "Execution gate: no active issue selected — skipping developer/reviewer/qa/git"
-  progress "  execution: skipped (no active issue)"
-fi
+
+  _active_count="$(count_active_issues_by_status "$REPO_ROOT/.ai/active" 'READY|IN_PROGRESS|REVIEW|QA_REVIEW|READY_FOR_COMMIT')"
+  if [[ "$_active_count" -gt 0 ]]; then
+    log "Execution gate: active issue still present after git — stopping before selecting additional work"
+    progress "  execution: stopped (active issue still present after git)"
+    break
+  fi
+done
 
 run_stage "release" || { log "Release gate failed (non-fatal)"; progress "  release: gate error"; }
 
