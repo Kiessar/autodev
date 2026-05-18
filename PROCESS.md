@@ -30,7 +30,7 @@ Each project gets:
 - its own lock file under `projects/<project>/.ai/run_agent.lock`
 - its own local cached checkout
 - its own local operator intake file at `projects/<project>/.ai/manualtasks.md`
-- its own local runtime env file at `projects/<project>/.ai/.env`
+- its own managed-repo runtime env file at `projects/<project>/repo/.env`
 - its own optional role overlays at `projects/<project>/.ai/roles/<role>.md`
 - its own `.ai/` workspace inside the managed repository
 
@@ -80,7 +80,7 @@ This keeps the developer on the latest upstream source without discarding local 
 - GitHub issues are the executable backlog.
 - The local issue cache is only for offline planning and reduced API churn.
 - `projects/<project>/.ai/manualtasks.md` is a one-shot intake source for the PO.
-- `projects/<project>/.ai/.env` is the local runtime environment file for secrets that should not be committed.
+- `projects/<project>/repo/.env` is the preferred local runtime environment file for secrets that should not be committed.
 - `projects/<project>/.ai/roles/<role>.md` can further specialize a shared role for one project.
 - The PO should spend time on vision analysis and creating new issues only when the queue is running low.
 - Pending manual tasks are still converted on the next run even if the issue pool is already healthy.

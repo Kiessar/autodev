@@ -142,26 +142,25 @@ Those files are loaded in addition to the shared role playbooks and are the righ
 
 ## Project runtime secrets
 
-For local runtime-only secrets, create:
+For local runtime-only secrets, prefer:
 
 ```text
-projects/<project>/.ai/.env
+projects/<project>/repo/.env
 ```
 
 Example for AutoAITrader:
 
 ```bash
-chmod 700 projects/AutoAITrader/.ai
-cat >> projects/AutoAITrader/.ai/.env <<'EOF'
+cat >> projects/AutoAITrader/repo/.env <<'EOF'
 KRAKEN_PAPER_API_KEY=your-paper-key
 KRAKEN_PAPER_API_SECRET=your-paper-secret
 KRAKEN_LIVE_API_KEY=your-live-key
 KRAKEN_LIVE_API_SECRET=your-live-secret
 EOF
-chmod 600 projects/AutoAITrader/.ai/.env
+chmod 600 projects/AutoAITrader/repo/.env
 ```
 
-`run_agent.sh -p <project> ...` sources that file before starting the pipeline, so the managed software can consume environment variables without committing secrets into Git.
+`run_agent.sh -p <project> ...` sources `repo/.env` before starting the pipeline, so the managed software and the runner use the same environment file without committing secrets into Git. The older `projects/<project>/.ai/.env` path is still accepted as a local fallback.
 
 ## Runtime layout
 

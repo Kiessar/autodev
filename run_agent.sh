@@ -26,6 +26,8 @@ MODEL="gpt-5.4"
 MAX_RUNTIME=3600
 INSTRUCTIONS_FILE=""
 PROJECT_ID="${PROJECT_ID:-}"
+PROJECT_ENV_FILES=""
+LOCK_ACQUIRED=0
 
 usage() {
   grep '^#' "$0" | sed 's/^# \?//'
@@ -45,15 +47,18 @@ load_project_runtime_env() {
     return 0
   fi
 
-  local env_file="$PROJECT_HOME_DIR/.ai/.env"
-  if [[ ! -f "$env_file" ]]; then
-    return 0
-  fi
+  local env_file
+  for env_file in "$PROJECT_HOME_DIR/.ai/.env" "$REPO_ROOT/.env"; do
+    if [[ ! -f "$env_file" ]]; then
+      continue
+    fi
 
-  set -a
-  # shellcheck disable=SC1090
-  source "$env_file"
-  set +a
+    set -a
+    # shellcheck disable=SC1090
+    source "$env_file"
+    set +a
+    PROJECT_ENV_FILES="${PROJECT_ENV_FILES:+$PROJECT_ENV_FILES, }$env_file"
+  done
 }
 
 while getopts "p:l:o:m:t:h" opt; do
@@ -110,10 +115,20 @@ acquire_lock() {
   mkdir -p "$(dirname "$LOCK_FILE")"
   echo $$ > "$LOCK_FILE"
   chmod 600 "$LOCK_FILE"
+  LOCK_ACQUIRED=1
   echo "[run_agent] Lock acquired (PID $$)."
 }
 
 release_lock() {
+  if [[ "$LOCK_ACQUIRED" -ne 1 ]]; then
+    return 0
+  fi
+
+  if [[ -f "$LOCK_FILE" ]] && [[ "$(cat "$LOCK_FILE" 2>/dev/null || true)" != "$$" ]]; then
+    echo "[run_agent] Lock file ownership changed; leaving $LOCK_FILE in place."
+    return 0
+  fi
+
   rm -f "$LOCK_FILE"
   echo "[run_agent] Lock released."
 }
@@ -142,7 +157,7 @@ load_project_runtime_env
 log "Starting agent run"
 log "Instructions: $INSTRUCTIONS_FILE"
 [[ -n "$PROJECT_ID" ]] && log "Project: $PROJECT_ID ($GH_REPO)"
-[[ -n "${PROJECT_HOME_DIR:-}" && -f "$PROJECT_HOME_DIR/.ai/.env" ]] && log "Project env: $PROJECT_HOME_DIR/.ai/.env"
+[[ -n "$PROJECT_ENV_FILES" ]] && log "Project env: $PROJECT_ENV_FILES"
 log "Model: $MODEL"
 log "Max runtime: ${MAX_RUNTIME}s"
 log "Lock: $LOCK_FILE"
